@@ -1,0 +1,16 @@
+# 核心敏感密钥证书（必须屏蔽）
+private_key.pem
+user.crt
+
+# Python 相关缓存
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.python-packages/
+
+# 临时测试文件
+test.txt
+cmd.txt
+*.tmp
+.DS_Store
