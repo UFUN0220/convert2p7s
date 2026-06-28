@@ -14,3 +14,11 @@ test.txt
 cmd.txt
 *.tmp
 .DS_Store
+
+# 本地运行审计日志（可能包含文件路径和摘要，不应提交）
+logs/
+
+# 打包产物
+build/
+dist/
+.venv-build/
