@@ -22,3 +22,4 @@ logs/
 build/
 dist/
 .venv-build/
+.venv-build-macos/

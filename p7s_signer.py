@@ -13,7 +13,12 @@ from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent
 RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", APP_DIR))
-RUNTIME_DIR = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else APP_DIR
+if getattr(sys, "frozen", False) and sys.platform == "darwin":
+    RUNTIME_DIR = Path.home() / "Library" / "Application Support" / "P7S离线文件数字签名工具"
+elif getattr(sys, "frozen", False):
+    RUNTIME_DIR = Path(sys.executable).resolve().parent
+else:
+    RUNTIME_DIR = APP_DIR
 LOCAL_PACKAGES = APP_DIR / ".python-packages"
 if LOCAL_PACKAGES.is_dir():
     sys.path.insert(0, str(LOCAL_PACKAGES))

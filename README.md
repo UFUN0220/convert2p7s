@@ -311,6 +311,83 @@ dist\logs\signing_audit.jsonl
 
 如需改成“exe 不内置私钥，运行时读取外部 `private_key.pem/user.crt`”，需要调整 `p7s_signer.spec` 和 `p7s_signer.py` 的资源路径策略。
 
+## macOS APP 打包
+
+项目已提供 macOS `.app` 专用打包配置：
+
+```text
+p7s_signer_macos.spec
+build_macos_app.sh
+```
+
+macOS `.app` 可以在 macOS 本机直接生成。当前项目所在机器是 macOS arm64，因此适合生成 Apple Silicon 版本 `.app`。如果需要同时支持 Intel Mac，应在 Intel Mac 上单独打包，或使用合适的 universal2 Python/PySide6 环境重新构建。
+
+### macOS 打包前置条件
+
+建议环境：
+
+- macOS 12+；
+- Python 3.9+；
+- 可访问 Python 包安装源；
+- 项目目录中存在：
+  - `p7s_signer.py`
+  - `signing_service.py`
+  - `private_key.pem`
+  - `user.crt`
+  - `requirements.txt`
+  - `requirements-build.txt`
+  - `p7s_signer_macos.spec`
+  - `build_macos_app.sh`
+
+### 一键打包
+
+在项目目录执行：
+
+```bash
+chmod +x build_macos_app.sh
+./build_macos_app.sh
+```
+
+脚本会自动执行：
+
+1. 检查 Python；
+2. 创建 `.venv-build-macos` 打包虚拟环境；
+3. 安装运行依赖和 PyInstaller；
+4. 执行 `test_signing_service.py` 回归测试；
+5. 使用 `p7s_signer_macos.spec` 构建 `.app`；
+6. 如系统存在 `codesign`，执行 ad-hoc 签名。
+
+构建成功后输出：
+
+```text
+dist/P7S离线文件数字签名工具.app
+```
+
+### APP 运行时目录说明
+
+打包后的 `.app` 会把 `private_key.pem` 和 `user.crt` 作为资源读取。审计日志不会写入 PyInstaller 临时目录，也不会写入 `.app` 包内部，而是写入 macOS 用户应用数据目录：
+
+```text
+~/Library/Application Support/P7S离线文件数字签名工具/logs/
+```
+
+这样可以避免运行时修改 `.app` 包内容，降低破坏应用签名和分发完整性的风险。
+
+### macOS Gatekeeper 说明
+
+当前脚本只做 ad-hoc codesign，不做 Apple Developer ID 签名和 notarization。因此：
+
+- 本机运行通常可用；
+- 拷贝到其他 Mac 后，可能被 Gatekeeper 提示“无法验证开发者”；
+- 企业内部分发时建议使用 Apple Developer ID 证书签名并 notarize；
+- 或通过企业 MDM/白名单方式分发。
+
+### 私钥打包安全提醒
+
+macOS `.app` 当前同样会内置 `private_key.pem` 和 `user.crt`。这便于离线交付，但安全边界与 Windows exe 相同：拿到 `.app` 的人理论上也拿到了签名能力。
+
+如果生产环境不能接受该风险，应改为外部受控私钥、加密私钥口令、系统钥匙串、USB Key 或 HSM。
+
 ## 大文件说明
 
 当前读取阶段按 1 MiB 分块读取并更新进度条，但 `cryptography` 的 PKCS#7 公开 API 在构建签名时仍需要将原文件内容作为 `bytes` 传入，因此实际签名阶段仍会占用内存。
