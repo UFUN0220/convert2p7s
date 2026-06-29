@@ -23,7 +23,7 @@ LOCAL_PACKAGES = APP_DIR / ".python-packages"
 if LOCAL_PACKAGES.is_dir():
     sys.path.insert(0, str(LOCAL_PACKAGES))
 
-from PySide6.QtCore import QStandardPaths, Qt, QThread, QUrl, Signal
+from PySide6.QtCore import QEvent, QStandardPaths, Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -60,7 +60,7 @@ from signing_service import (
 KEY_FILE = RESOURCE_DIR / "private_key.pem"
 CERT_FILE = RESOURCE_DIR / "user.crt"
 AUDIT_LOG_FILE = RUNTIME_DIR / "logs" / "signing_audit.jsonl"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.2.2"
 
 
 class SigningWorker(QThread):
@@ -112,55 +112,85 @@ class P7SSignerWindow(QMainWindow):
         self.certificate_ready = False
         self.worker: SigningWorker | None = None
         self.setWindowTitle("P7S 离线文件数字签名工具")
-        self.setMinimumSize(760, 540)
-        self.resize(860, 590)
+        self.setMinimumSize(820, 620)
+        self.resize(920, 660)
+        self.setAcceptDrops(True)
         self._build_ui()
+
+    def configure_drop_target(self, widget: QWidget) -> None:
+        widget.setAcceptDrops(True)
+        widget.installEventFilter(self)
 
     def _build_ui(self) -> None:
         root = QWidget()
         root.setObjectName("root")
+        self.configure_drop_target(root)
         self.setCentralWidget(root)
         outer = QVBoxLayout(root)
-        outer.setContentsMargins(56, 46, 56, 46)
+        outer.setContentsMargins(64, 52, 64, 52)
         outer.addStretch(1)
 
         self.card = QFrame()
         self.card.setObjectName("signingCard")
-        self.card.setMaximumWidth(680)
+        self.configure_drop_target(self.card)
+        self.card.setMaximumWidth(740)
         self.card.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
         shadow = QGraphicsDropShadowEffect(self.card)
-        shadow.setBlurRadius(34)
-        shadow.setOffset(0, 12)
-        shadow.setColor(QColor(0, 0, 0, 86))
+        shadow.setBlurRadius(42)
+        shadow.setOffset(0, 18)
+        shadow.setColor(QColor(0, 0, 0, 96))
         self.card.setGraphicsEffect(shadow)
         outer.addWidget(self.card, 0, Qt.AlignmentFlag.AlignHCenter)
         outer.addStretch(1)
 
         layout = QVBoxLayout(self.card)
-        layout.setContentsMargins(44, 38, 44, 34)
+        layout.setContentsMargins(46, 42, 46, 36)
         layout.setSpacing(0)
+
+        header_row = QHBoxLayout()
+        header_row.setSpacing(16)
+        accent = QFrame()
+        accent.setObjectName("accentRail")
+        accent.setFixedSize(4, 56)
+        header_text = QVBoxLayout()
+        header_text.setSpacing(0)
         title = QLabel("P7S 离线文件数字签名工具")
         title.setObjectName("title")
         subtitle = QLabel("本地密钥离线签名，文件不上传网络")
         subtitle.setObjectName("subtitle")
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
-        layout.addSpacing(24)
+        header_text.addWidget(title)
+        header_text.addWidget(subtitle)
+        header_row.addWidget(accent)
+        header_row.addLayout(header_text, 1)
+        layout.addLayout(header_row)
+        layout.addSpacing(26)
 
         self.cert_label = QLabel("正在读取签名证书信息…")
         self.cert_label.setObjectName("certInfo")
         self.cert_label.setWordWrap(True)
         layout.addWidget(self.cert_label)
-        layout.addSpacing(22)
+        layout.addSpacing(18)
+
+        self.file_zone = QFrame()
+        self.file_zone.setObjectName("fileDropZone")
+        self.configure_drop_target(self.file_zone)
+        file_zone_layout = QVBoxLayout(self.file_zone)
+        file_zone_layout.setContentsMargins(18, 16, 18, 15)
+        file_zone_layout.setSpacing(0)
+        file_heading = QLabel("选择待签名文件")
+        file_heading.setObjectName("sectionTitle")
+        file_zone_layout.addWidget(file_heading)
+        file_zone_layout.addSpacing(11)
 
         # The readonly line edit is deliberately used as a file-path field: it
         # shows only the file name to keep the card clean; the full absolute path
         # is available via tooltip and kept in self.input_file for signing.
         file_row = QHBoxLayout()
-        file_row.setSpacing(10)
+        file_row.setSpacing(12)
         self.path_edit = QLineEdit("尚未选择文件")
         self.path_edit.setObjectName("filePath")
         self.path_edit.setReadOnly(True)
+        self.path_edit.setAcceptDrops(False)
         self.path_edit.setPlaceholderText("尚未选择文件")
         self.choose_button = QPushButton("选择文件")
         self.choose_button.setObjectName("secondaryButton")
@@ -172,12 +202,19 @@ class P7SSignerWindow(QMainWindow):
         file_row.addWidget(self.path_edit, 1)
         file_row.addWidget(self.choose_button)
         file_row.addWidget(self.clear_button)
-        layout.addLayout(file_row)
+        file_zone_layout.addLayout(file_row)
 
-        self.file_info = QLabel("支持任意文件格式")
+        self.file_info = QLabel("支持任意文件格式 · 可将单个本地文件拖拽到此区域")
         self.file_info.setObjectName("fileInfo")
-        layout.addWidget(self.file_info)
-        layout.addSpacing(28)
+        file_zone_layout.addWidget(self.file_info)
+        layout.addWidget(self.file_zone)
+        layout.addSpacing(18)
+
+        self.status_panel = QFrame()
+        self.status_panel.setObjectName("statusPanel")
+        status_panel_layout = QVBoxLayout(self.status_panel)
+        status_panel_layout.setContentsMargins(18, 15, 18, 17)
+        status_panel_layout.setSpacing(0)
 
         status_row = QHBoxLayout()
         self.status_label = QLabel("准备就绪")
@@ -189,17 +226,18 @@ class P7SSignerWindow(QMainWindow):
         status_row.addWidget(self.status_label)
         status_row.addStretch(1)
         status_row.addWidget(self.percent_label)
-        layout.addLayout(status_row)
-        layout.addSpacing(8)
+        status_panel_layout.addLayout(status_row)
+        status_panel_layout.addSpacing(10)
         self.progress = QProgressBar()
         self.progress.setObjectName("progress")
         self.progress.setRange(0, 100)
         self.progress.setTextVisible(False)
-        layout.addWidget(self.progress)
-        layout.addSpacing(23)
+        status_panel_layout.addWidget(self.progress)
+        layout.addWidget(self.status_panel)
+        layout.addSpacing(22)
 
         footer = QHBoxLayout()
-        footer.setSpacing(10)
+        footer.setSpacing(12)
         self.security_note = QLabel(f"离线安全签名 · 密钥本地存储，数据不上传 · v{APP_VERSION}")
         self.security_note.setObjectName("securityNote")
         self.open_folder_button = QPushButton("打开所在文件夹")
@@ -216,6 +254,18 @@ class P7SSignerWindow(QMainWindow):
         footer.addWidget(self.sign_button)
         layout.addLayout(footer)
         self.load_certificate_summary()
+
+    def eventFilter(self, watched: object, event: QEvent) -> bool:
+        """Enable drag-and-drop on the card without creating a custom widget."""
+        if event.type() in (QEvent.Type.DragEnter, QEvent.Type.DragMove):
+            return self.handle_drag_enter_or_move(event)
+        if event.type() == QEvent.Type.DragLeave:
+            self.set_drag_highlight(False)
+            self.restore_idle_status_after_drag()
+            return False
+        if event.type() == QEvent.Type.Drop:
+            return self.handle_drop(event)
+        return super().eventFilter(watched, event)
 
     def load_certificate_summary(self) -> None:
         try:
@@ -243,12 +293,15 @@ class P7SSignerWindow(QMainWindow):
         choice, _ = QFileDialog.getOpenFileName(self, "选择需要签名的文件", str(Path.home()), "所有文件 (*)")
         if not choice:
             return
-        candidate = Path(choice).expanduser()
+        self.select_input_file(Path(choice).expanduser(), show_dialog=True)
+
+    def select_input_file(self, candidate: Path, *, show_dialog: bool) -> None:
         try:
             size = self.validate_input_file(candidate)
         except (OSError, ValueError) as exc:
             self.set_status("文件导入失败", "error")
-            QMessageBox.critical(self, "文件导入失败", str(exc))
+            if show_dialog:
+                QMessageBox.critical(self, "文件导入失败", str(exc))
             return
         self.input_file = candidate.resolve()
         self.last_output_file = None
@@ -265,6 +318,75 @@ class P7SSignerWindow(QMainWindow):
         else:
             self.set_status("文件已选择，但证书不可用", "error")
 
+    def handle_drag_enter_or_move(self, event: QEvent) -> bool:
+        if self.worker and self.worker.isRunning():
+            event.ignore()
+            self.set_drag_highlight(False)
+            return True
+        if self.extract_single_local_drop_path(event, update_status=False) is None:
+            event.ignore()
+            self.set_drag_highlight(False)
+            return True
+        event.acceptProposedAction()
+        self.set_drag_highlight(True)
+        self.file_info.setText("释放鼠标以上传文件")
+        self.set_status("准备接收文件", "working")
+        return True
+
+    def handle_drop(self, event: QEvent) -> bool:
+        self.set_drag_highlight(False)
+        self.file_info.setText("支持任意文件格式 · 可将单个本地文件拖拽到此区域")
+        candidate = self.extract_single_local_drop_path(event, update_status=True)
+        if candidate is None:
+            event.ignore()
+            return True
+        event.acceptProposedAction()
+        self.select_input_file(candidate, show_dialog=False)
+        return True
+
+    def extract_single_local_drop_path(self, event: QEvent, *, update_status: bool) -> Path | None:
+        mime = event.mimeData()
+        if not mime.hasUrls():
+            if update_status:
+                self.set_status("请拖入本地文件", "error")
+            return None
+        urls = mime.urls()
+        local_urls = [url for url in urls if url.isLocalFile()]
+        if len(local_urls) != len(urls):
+            if update_status:
+                self.set_status("仅支持拖入本地文件", "error")
+            return None
+        if len(local_urls) != 1:
+            if update_status:
+                self.set_status("当前仅支持拖入单个文件", "error")
+            return None
+        return Path(local_urls[0].toLocalFile()).expanduser()
+
+    def set_drag_highlight(self, active: bool) -> None:
+        for widget in (self.card, self.file_zone, self.path_edit):
+            widget.setProperty("dragActive", active)
+            widget.style().unpolish(widget)
+            widget.style().polish(widget)
+            widget.update()
+        self.file_info.setProperty("dragActive", active)
+        self.file_info.style().unpolish(self.file_info)
+        self.file_info.style().polish(self.file_info)
+        self.file_info.update()
+
+    def restore_idle_status_after_drag(self) -> None:
+        if not self.input_file:
+            self.file_info.setText("支持任意文件格式 · 可将单个本地文件拖拽到此区域")
+        if self.worker and self.worker.isRunning():
+            return
+        if self.input_file and self.certificate_ready:
+            self.set_status("文件已就绪", "success")
+        elif self.input_file:
+            self.set_status("文件已选择，但证书不可用", "error")
+        elif self.certificate_ready:
+            self.set_status("准备就绪", "idle")
+        else:
+            self.set_status("签名证书不可用", "error")
+
     def clear_file(self) -> None:
         if self.worker and self.worker.isRunning():
             return
@@ -273,7 +395,7 @@ class P7SSignerWindow(QMainWindow):
         self.signing_completed = False
         self.path_edit.setText("尚未选择文件")
         self.path_edit.setToolTip("")
-        self.file_info.setText("支持任意文件格式")
+        self.file_info.setText("支持任意文件格式 · 可将单个本地文件拖拽到此区域")
         self.progress.setValue(0)
         self.percent_label.setText("")
         self.clear_button.setEnabled(False)
@@ -350,7 +472,7 @@ class P7SSignerWindow(QMainWindow):
         self.sign_button.setEnabled(not busy and self.input_file is not None and not self.signing_completed and self.certificate_ready)
 
     def set_status(self, message: str, state: str, percent: int | None = None) -> None:
-        color = {"working": "#246BCE", "success": "#387A5A", "error": "#B04A4A"}.get(state, "#7C858F")
+        color = {"working": "#0A84FF", "success": "#248A3D", "error": "#D70015"}.get(state, "#7C858F")
         self.status_label.setText(message)
         self.status_label.setStyleSheet(f"color: {color};")
         if percent is not None:
@@ -402,41 +524,71 @@ class P7SSignerWindow(QMainWindow):
 
 
 QSS = """
-QWidget#root { background: #24272C; }
-QFrame#signingCard { background: rgba(248, 249, 250, 242); border-radius: 16px; }
-QLabel#title { color: #20242A; font-size: 27px; font-weight: 800; letter-spacing: -0.2px; }
-QLabel#subtitle { color: #8A929B; font-size: 13px; padding-top: 8px; }
+QWidget#root { background: #17202B; font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", "Helvetica Neue", Arial; }
+QFrame#signingCard {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #FBFCFF, stop:0.52 #F7F9FC, stop:1 #F3F8F7);
+    border: 1px solid rgba(255, 255, 255, 180);
+    border-radius: 22px;
+}
+QFrame#signingCard[dragActive="true"] { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #F7FBFF, stop:1 #F1FFF9); border: 1px solid #8EC5FF; }
+QFrame#accentRail { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0A84FF, stop:0.56 #64D2FF, stop:1 #30D158); border-radius: 2px; }
+QLabel#title { color: #161B22; font-size: 29px; font-weight: 800; letter-spacing: -0.4px; }
+QLabel#subtitle { color: #7F8893; font-size: 13px; padding-top: 9px; letter-spacing: 0.1px; }
 QLabel#certInfo {
-    background: #F0F3F6;
-    border-radius: 10px;
-    color: #8A929B;
+    background: #F1F7FF;
+    border: 1px solid #DCEBFF;
+    border-radius: 13px;
+    color: #627386;
     font-size: 11px;
-    padding: 9px 12px;
+    padding: 11px 14px;
+}
+QFrame#fileDropZone {
+    background: #FFFFFF;
+    border: 1px solid #DFE9F4;
+    border-radius: 16px;
+}
+QFrame#fileDropZone[dragActive="true"] {
+    background: #F2FAFF;
+    border: 1px solid #0A84FF;
+}
+QLabel#sectionTitle {
+    color: #2A313B;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
 }
 QLineEdit#filePath {
-    background: #FFFFFF;
-    border: 1px solid #DDE1E6;
-    border-radius: 10px;
-    color: #20242A;
-    padding: 10px 13px;
+    background: #FAFCFF;
+    border: 1px solid #DEE8F2;
+    border-radius: 12px;
+    color: #1F2732;
+    padding: 12px 14px;
     font-size: 13px;
-    selection-background-color: #DCE9FA;
+    selection-background-color: #DCEEFF;
 }
-QLineEdit#filePath:focus { border: 1px solid #CDD3DA; }
-QLabel#fileInfo { color: #8A929B; font-size: 11px; padding-top: 8px; }
-QLabel#status, QLabel#percent { color: #8A929B; font-size: 12px; }
-QLabel#securityNote { color: #B3B9C0; font-size: 11px; }
-QProgressBar#progress { background: #E5E8EB; border: none; border-radius: 5px; min-height: 8px; max-height: 8px; }
-QProgressBar#progress::chunk { background: #246BCE; border-radius: 5px; }
-QPushButton { border: none; border-radius: 10px; padding: 10px 18px; font-size: 13px; font-weight: 600; min-height: 18px; }
-QPushButton#primaryButton { background: #246BCE; color: #FFFFFF; }
-QPushButton#primaryButton:hover { background: #1D5FB8; }
-QPushButton#primaryButton:pressed { background: #194F98; }
-QPushButton#primaryButton:disabled { background: rgba(184, 190, 198, 150); color: #F7F8F9; }
-QPushButton#secondaryButton { background: #EEF1F4; color: #20242A; }
-QPushButton#secondaryButton:hover { background: #E2E6EA; }
-QPushButton#secondaryButton:pressed { background: #D8DDE3; }
-QPushButton#secondaryButton:disabled { background: rgba(238, 241, 244, 150); color: #A2A9B1; }
+QLineEdit#filePath:focus { border: 1px solid #C9D2DC; }
+QLineEdit#filePath[dragActive="true"] { border: 1px solid #0A84FF; background: #FFFFFF; }
+QLabel#fileInfo { color: #8B95A1; font-size: 11px; padding-top: 7px; }
+QLabel#fileInfo[dragActive="true"] { color: #0A84FF; font-weight: 600; }
+QFrame#statusPanel {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #F0F7FF, stop:0.55 #F5F3FF, stop:1 #F1FFF7);
+    border: 1px solid #E1EAF3;
+    border-radius: 15px;
+}
+QLabel#status { color: #7B8490; font-size: 12px; font-weight: 600; }
+QLabel#percent { color: #7B8490; font-size: 12px; font-weight: 700; }
+QLabel#securityNote { color: #9CA5AF; font-size: 11px; }
+QProgressBar#progress { background: #DEE8F2; border: none; border-radius: 5px; min-height: 9px; max-height: 9px; }
+QProgressBar#progress::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0A84FF, stop:0.65 #64D2FF, stop:1 #30D158); border-radius: 5px; }
+QPushButton { border: none; border-radius: 12px; padding: 11px 19px; font-size: 13px; font-weight: 700; min-height: 20px; }
+QPushButton#primaryButton { background: #0A84FF; color: #FFFFFF; }
+QPushButton#primaryButton:hover { background: #0071E3; }
+QPushButton#primaryButton:pressed { background: #005BBF; }
+QPushButton#primaryButton:disabled { background: #C2CAD4; color: #F7F9FB; }
+QPushButton#secondaryButton { background: #F2F6FB; color: #27313D; border: 1px solid #E1EAF4; }
+QPushButton#secondaryButton:hover { background: #EAF4FF; }
+QPushButton#secondaryButton:pressed { background: #DCEEFF; }
+QPushButton#secondaryButton:disabled { background: #F1F4F8; color: #A4ADB8; border: 1px solid #E8ECF1; }
 """
 
 

@@ -74,8 +74,8 @@ app = BUNDLE(
     info_plist={
         "CFBundleName": app_name,
         "CFBundleDisplayName": app_name,
-        "CFBundleShortVersionString": "1.0.0",
-        "CFBundleVersion": "1.0.0",
+        "CFBundleShortVersionString": "1.2.2",
+        "CFBundleVersion": "1.2.2",
         "NSHighResolutionCapable": True,
         "NSRequiresAquaSystemAppearance": False,
     },
