@@ -80,23 +80,23 @@ class SigningWorker(QThread):
         def report_read_progress(done: int, total: int) -> None:
             # Byte-level reading occupies 0–80%; service signing then completes it.
             percent = 80 if total == 0 else min(80, int(done * 80 / total))
-            self.progress_changed.emit(percent, "正在读取文件…")
+            self.progress_changed.emit(percent, "Reading file…")
 
         try:
-            self.progress_changed.emit(3, "正在校验证书与私钥…")
+            self.progress_changed.emit(3, "Validating certificate and private key…")
             service = P7SSigningService(KEY_FILE, CERT_FILE)
             result = service.sign_file(
                 self.source, self.destination, report_read_progress, overwrite=True
             )
-            self.progress_changed.emit(92, "正在自动验签…")
-            self.progress_changed.emit(100, "签名与验签完成")
+            self.progress_changed.emit(92, "Verifying signature…")
+            self.progress_changed.emit(100, "Signing and verification completed")
             AuditLogger(AUDIT_LOG_FILE).record_success(self.source, result)
             self.succeeded.emit(result)
         except SigningError as exc:
             AuditLogger(AUDIT_LOG_FILE).record_failure(self.source, self.destination, exc)
             self.failed.emit(exc)
         except Exception as exc:
-            wrapped = SigningError("发生未预期的内部错误；未生成或覆盖目标文件。")
+            wrapped = SigningError("An unexpected internal error occurred. No target file was created or overwritten.")
             AuditLogger(AUDIT_LOG_FILE).record_failure(self.source, self.destination, exc)
             self.failed.emit(wrapped)
 
@@ -111,7 +111,7 @@ class P7SSignerWindow(QMainWindow):
         self.signing_completed = False
         self.certificate_ready = False
         self.worker: SigningWorker | None = None
-        self.setWindowTitle("P7S 离线文件数字签名工具")
+        self.setWindowTitle("P7S Offline File Signing Tool")
         self.setMinimumSize(820, 620)
         self.resize(920, 660)
         self.setAcceptDrops(True)
@@ -154,9 +154,9 @@ class P7SSignerWindow(QMainWindow):
         accent.setFixedSize(4, 56)
         header_text = QVBoxLayout()
         header_text.setSpacing(0)
-        title = QLabel("P7S 离线文件数字签名工具")
+        title = QLabel("P7S Offline File Signing Tool")
         title.setObjectName("title")
-        subtitle = QLabel("本地密钥离线签名，文件不上传网络")
+        subtitle = QLabel("Offline signing with a local key. Files are never uploaded.")
         subtitle.setObjectName("subtitle")
         header_text.addWidget(title)
         header_text.addWidget(subtitle)
@@ -165,7 +165,7 @@ class P7SSignerWindow(QMainWindow):
         layout.addLayout(header_row)
         layout.addSpacing(26)
 
-        self.cert_label = QLabel("正在读取签名证书信息…")
+        self.cert_label = QLabel("Reading signing certificate information…")
         self.cert_label.setObjectName("certInfo")
         self.cert_label.setWordWrap(True)
         layout.addWidget(self.cert_label)
@@ -177,7 +177,7 @@ class P7SSignerWindow(QMainWindow):
         file_zone_layout = QVBoxLayout(self.file_zone)
         file_zone_layout.setContentsMargins(18, 16, 18, 15)
         file_zone_layout.setSpacing(0)
-        file_heading = QLabel("选择待签名文件")
+        file_heading = QLabel("Select file to sign")
         file_heading.setObjectName("sectionTitle")
         file_zone_layout.addWidget(file_heading)
         file_zone_layout.addSpacing(11)
@@ -187,15 +187,15 @@ class P7SSignerWindow(QMainWindow):
         # is available via tooltip and kept in self.input_file for signing.
         file_row = QHBoxLayout()
         file_row.setSpacing(12)
-        self.path_edit = QLineEdit("尚未选择文件")
+        self.path_edit = QLineEdit("No file selected")
         self.path_edit.setObjectName("filePath")
         self.path_edit.setReadOnly(True)
         self.path_edit.setAcceptDrops(False)
-        self.path_edit.setPlaceholderText("尚未选择文件")
-        self.choose_button = QPushButton("选择文件")
+        self.path_edit.setPlaceholderText("No file selected")
+        self.choose_button = QPushButton("Choose File")
         self.choose_button.setObjectName("secondaryButton")
         self.choose_button.clicked.connect(self.choose_file)
-        self.clear_button = QPushButton("清空")
+        self.clear_button = QPushButton("Clear")
         self.clear_button.setObjectName("secondaryButton")
         self.clear_button.setEnabled(False)
         self.clear_button.clicked.connect(self.clear_file)
@@ -204,7 +204,7 @@ class P7SSignerWindow(QMainWindow):
         file_row.addWidget(self.clear_button)
         file_zone_layout.addLayout(file_row)
 
-        self.file_info = QLabel("支持任意文件格式 · 可将单个本地文件拖拽到此区域")
+        self.file_info = QLabel("Supports any file type · Drag one local file here")
         self.file_info.setObjectName("fileInfo")
         file_zone_layout.addWidget(self.file_info)
         layout.addWidget(self.file_zone)
@@ -217,7 +217,7 @@ class P7SSignerWindow(QMainWindow):
         status_panel_layout.setSpacing(0)
 
         status_row = QHBoxLayout()
-        self.status_label = QLabel("准备就绪")
+        self.status_label = QLabel("Ready")
         self.status_label.setObjectName("status")
         self.percent_label = QLabel("")
         self.percent_label.setObjectName("percent")
@@ -238,16 +238,16 @@ class P7SSignerWindow(QMainWindow):
 
         footer = QHBoxLayout()
         footer.setSpacing(12)
-        self.security_note = QLabel(f"离线安全签名 · 密钥本地存储，数据不上传 · v{APP_VERSION}")
+        self.security_note = QLabel(f"Offline secure signing · Local key storage · No upload · v{APP_VERSION}")
         self.security_note.setObjectName("securityNote")
-        self.open_folder_button = QPushButton("打开所在文件夹")
+        self.open_folder_button = QPushButton("Open Folder")
         self.open_folder_button.setObjectName("secondaryButton")
         self.open_folder_button.setEnabled(False)
         self.open_folder_button.clicked.connect(self.open_output_folder)
         footer.addWidget(self.security_note)
         footer.addStretch(1)
         footer.addWidget(self.open_folder_button)
-        self.sign_button = QPushButton("生成 P7S 签名")
+        self.sign_button = QPushButton("Generate P7S")
         self.sign_button.setObjectName("primaryButton")
         self.sign_button.setEnabled(False)
         self.sign_button.clicked.connect(self.choose_destination_and_sign)
@@ -272,51 +272,62 @@ class P7SSignerWindow(QMainWindow):
             info = P7SSigningService(KEY_FILE, CERT_FILE).get_signing_certificate_info()
         except SigningError as exc:
             self.certificate_ready = False
-            self.cert_label.setText(f"证书状态：不可用 · {exc}")
+            self.cert_label.setText(f"Certificate status: unavailable · {self.friendly_error(exc)}")
             self.cert_label.setStyleSheet("color: #B04A4A;")
-            self.set_status("签名证书不可用", "error")
+            self.set_status("Signing certificate unavailable", "error")
             self.sign_button.setEnabled(False)
             return
         self.certificate_ready = info.status == "有效"
         valid_to = info.not_valid_after.astimezone().strftime("%Y-%m-%d")
         fingerprint = self.compact_fingerprint(info.sha256_fingerprint)
+        status_text = {"有效": "Valid", "未生效": "Not yet valid", "已过期": "Expired"}.get(info.status, info.status)
         self.cert_label.setText(
-            f"签名证书：{info.subject} · {info.status} · 有效期至 {valid_to} · SHA256 {fingerprint}"
+            f"Signing certificate: {info.subject} · {status_text} · Valid until {valid_to} · SHA256 {fingerprint}"
         )
         if self.certificate_ready:
             self.cert_label.setStyleSheet("color: #8A929B;")
         else:
             self.cert_label.setStyleSheet("color: #B04A4A;")
-            self.set_status("签名证书不可用", "error")
+            self.set_status("Signing certificate unavailable", "error")
 
-    def choose_file(self) -> None:
-        choice, _ = QFileDialog.getOpenFileName(self, "选择需要签名的文件", str(Path.home()), "所有文件 (*)")
-        if not choice:
+    def choose_file(self, checked: bool = False) -> None:
+        """Open a robust single-file picker from the Choose File button."""
+        if self.worker and self.worker.isRunning():
             return
-        self.select_input_file(Path(choice).expanduser(), show_dialog=True)
+        dialog = QFileDialog(self, "Choose file to sign", str(Path.home()))
+        dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
+        dialog.setNameFilter("All Files (*)")
+        dialog.setViewMode(QFileDialog.ViewMode.Detail)
+        dialog.setOption(QFileDialog.Option.DontUseNativeDialog, True)
+        if dialog.exec() != QFileDialog.DialogCode.Accepted:
+            return
+        selected = dialog.selectedFiles()
+        if not selected:
+            return
+        self.select_input_file(Path(selected[0]).expanduser(), show_dialog=True)
 
     def select_input_file(self, candidate: Path, *, show_dialog: bool) -> None:
         try:
             size = self.validate_input_file(candidate)
         except (OSError, ValueError) as exc:
-            self.set_status("文件导入失败", "error")
+            self.set_status("File import failed", "error")
             if show_dialog:
-                QMessageBox.critical(self, "文件导入失败", str(exc))
+                QMessageBox.critical(self, "File Import Failed", str(exc))
             return
         self.input_file = candidate.resolve()
         self.last_output_file = None
         self.signing_completed = False
         self.path_edit.setText(self.input_file.name)
         self.path_edit.setToolTip(str(self.input_file))
-        warning = " · 大文件签名可能占用较多内存" if size > MAX_RECOMMENDED_FILE_SIZE else ""
-        self.file_info.setText(f"{self.format_size(size)} · 文件已就绪{warning}")
+        warning = " · Large files may use more memory" if size > MAX_RECOMMENDED_FILE_SIZE else ""
+        self.file_info.setText(f"{self.format_size(size)} · File ready{warning}")
         self.clear_button.setEnabled(True)
         self.open_folder_button.setEnabled(False)
         self.sign_button.setEnabled(self.certificate_ready)
         if self.certificate_ready:
-            self.set_status("文件已就绪", "success")
+            self.set_status("File ready", "success")
         else:
-            self.set_status("文件已选择，但证书不可用", "error")
+            self.set_status("File selected, but certificate unavailable", "error")
 
     def handle_drag_enter_or_move(self, event: QEvent) -> bool:
         if self.worker and self.worker.isRunning():
@@ -329,13 +340,13 @@ class P7SSignerWindow(QMainWindow):
             return True
         event.acceptProposedAction()
         self.set_drag_highlight(True)
-        self.file_info.setText("释放鼠标以上传文件")
-        self.set_status("准备接收文件", "working")
+        self.file_info.setText("Release to add this file")
+        self.set_status("Ready to receive file", "working")
         return True
 
     def handle_drop(self, event: QEvent) -> bool:
         self.set_drag_highlight(False)
-        self.file_info.setText("支持任意文件格式 · 可将单个本地文件拖拽到此区域")
+        self.file_info.setText("Supports any file type · Drag one local file here")
         candidate = self.extract_single_local_drop_path(event, update_status=True)
         if candidate is None:
             event.ignore()
@@ -348,17 +359,17 @@ class P7SSignerWindow(QMainWindow):
         mime = event.mimeData()
         if not mime.hasUrls():
             if update_status:
-                self.set_status("请拖入本地文件", "error")
+                self.set_status("Please drag in a local file", "error")
             return None
         urls = mime.urls()
         local_urls = [url for url in urls if url.isLocalFile()]
         if len(local_urls) != len(urls):
             if update_status:
-                self.set_status("仅支持拖入本地文件", "error")
+                self.set_status("Only local files are supported", "error")
             return None
         if len(local_urls) != 1:
             if update_status:
-                self.set_status("当前仅支持拖入单个文件", "error")
+                self.set_status("Only one file is supported", "error")
             return None
         return Path(local_urls[0].toLocalFile()).expanduser()
 
@@ -375,17 +386,17 @@ class P7SSignerWindow(QMainWindow):
 
     def restore_idle_status_after_drag(self) -> None:
         if not self.input_file:
-            self.file_info.setText("支持任意文件格式 · 可将单个本地文件拖拽到此区域")
+            self.file_info.setText("Supports any file type · Drag one local file here")
         if self.worker and self.worker.isRunning():
             return
         if self.input_file and self.certificate_ready:
-            self.set_status("文件已就绪", "success")
+            self.set_status("File ready", "success")
         elif self.input_file:
-            self.set_status("文件已选择，但证书不可用", "error")
+            self.set_status("File selected, but certificate unavailable", "error")
         elif self.certificate_ready:
-            self.set_status("准备就绪", "idle")
+            self.set_status("Ready", "idle")
         else:
-            self.set_status("签名证书不可用", "error")
+            self.set_status("Signing certificate unavailable", "error")
 
     def clear_file(self) -> None:
         if self.worker and self.worker.isRunning():
@@ -393,46 +404,46 @@ class P7SSignerWindow(QMainWindow):
         self.input_file = None
         self.last_output_file = None
         self.signing_completed = False
-        self.path_edit.setText("尚未选择文件")
+        self.path_edit.setText("No file selected")
         self.path_edit.setToolTip("")
-        self.file_info.setText("支持任意文件格式 · 可将单个本地文件拖拽到此区域")
+        self.file_info.setText("Supports any file type · Drag one local file here")
         self.progress.setValue(0)
         self.percent_label.setText("")
         self.clear_button.setEnabled(False)
         self.open_folder_button.setEnabled(False)
         self.sign_button.setEnabled(False)
-        self.set_status("准备就绪", "idle")
+        self.set_status("Ready", "idle")
 
     def choose_destination_and_sign(self) -> None:
         if not self.certificate_ready:
-            QMessageBox.critical(self, "证书不可用", "当前签名证书或私钥不可用，请修复 private_key.pem / user.crt 后重新启动工具。")
+            QMessageBox.critical(self, "Certificate Unavailable", "The signing certificate or private key is unavailable. Please fix private_key.pem / user.crt and restart the tool.")
             return
         if not self.input_file:
-            QMessageBox.information(self, "尚未选择文件", "请先选择需要签名的文件。")
+            QMessageBox.information(self, "No File Selected", "Please choose a file to sign first.")
             return
         try:
             self.validate_input_file(self.input_file)
         except (OSError, ValueError) as exc:
-            self.set_status("文件不可用", "error")
-            QMessageBox.critical(self, "文件不可用", f"签名前检查失败：\n{exc}")
+            self.set_status("File unavailable", "error")
+            QMessageBox.critical(self, "File Unavailable", f"Pre-signing check failed:\n{exc}")
             return
         desktop = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DesktopLocation) or str(Path.home())
         proposed = f"{self.input_file.name}.p7s"
-        target, _ = QFileDialog.getSaveFileName(self, "保存 P7S 签名文件", str(Path(desktop) / proposed), "P7S 签名文件 (*.p7s);;所有文件 (*)")
+        target, _ = QFileDialog.getSaveFileName(self, "Save P7S signature file", str(Path(desktop) / proposed), "P7S Signature Files (*.p7s);;All Files (*)")
         if not target:
             return
         output = Path(target)
         if output.suffix.lower() != ".p7s":
             output = output.with_suffix(".p7s")
         if output.exists():
-            answer = QMessageBox.question(self, "确认覆盖", f"以下文件已存在：\n{output.name}\n\n是否替换它？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+            answer = QMessageBox.question(self, "Confirm Replace", f"The following file already exists:\n{output.name}\n\nDo you want to replace it?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
             if answer != QMessageBox.StandardButton.Yes:
                 return
         self.start_signing(output)
 
     def start_signing(self, output: Path) -> None:
         self.set_busy(True)
-        self.set_status("正在读取文件…", "working", 0)
+        self.set_status("Reading file…", "working", 0)
         self.worker = SigningWorker(self.input_file, output, self)
         self.worker.progress_changed.connect(self.set_status)
         self.worker.succeeded.connect(self.on_signing_succeeded)
@@ -443,20 +454,20 @@ class P7SSignerWindow(QMainWindow):
     def on_signing_succeeded(self, result: SigningResult) -> None:
         self.last_output_file = result.path
         self.signing_completed = True
-        self.set_status("签名已安全保存，自动验签通过", "success", 100)
+        self.set_status("Signature saved and verified", "success", 100)
         self.open_folder_button.setEnabled(True)
         self.sign_button.setEnabled(False)
         QMessageBox.information(
             self,
-            "签名完成",
-            "P7S 签名文件已保存，并已完成自动验签。\n\n"
-            f"保存位置：\n{result.path}\n\n"
-            f"原文件 SHA256：\n{result.source_sha256}",
+            "Signing Complete",
+            "The P7S signature file has been saved and verified.\n\n"
+            f"Saved to:\n{result.path}\n\n"
+            f"Source file SHA256:\n{result.source_sha256}",
         )
 
     def on_signing_failed(self, error: SigningError) -> None:
-        self.set_status("签名失败", "error", 0)
-        QMessageBox.critical(self, "签名失败", self.friendly_error(error))
+        self.set_status("Signing failed", "error", 0)
+        QMessageBox.critical(self, "Signing Failed", self.friendly_error(error))
 
     def on_worker_finished(self) -> None:
         self.set_busy(False)
@@ -471,9 +482,10 @@ class P7SSignerWindow(QMainWindow):
         self.open_folder_button.setEnabled(not busy and self.last_output_file is not None)
         self.sign_button.setEnabled(not busy and self.input_file is not None and not self.signing_completed and self.certificate_ready)
 
-    def set_status(self, message: str, state: str, percent: int | None = None) -> None:
-        color = {"working": "#0A84FF", "success": "#248A3D", "error": "#D70015"}.get(state, "#7C858F")
-        self.status_label.setText(message)
+    def set_status(self, message: object, state: str, percent: int | None = None) -> None:
+        color = {"working": "#0A84FF", "success": "#248A3D", "error": "#D70015"}.get(str(state), "#7C858F")
+        safe_message = str(message).strip() if message is not None else ""
+        self.status_label.setText(safe_message or "Ready")
         self.status_label.setStyleSheet(f"color: {color};")
         if percent is not None:
             self.progress.setValue(percent)
@@ -484,18 +496,18 @@ class P7SSignerWindow(QMainWindow):
             return
         folder = self.last_output_file.parent
         if not folder.exists():
-            QMessageBox.warning(self, "无法打开文件夹", "签名文件所在文件夹不存在或已被移动。")
+            QMessageBox.warning(self, "Cannot Open Folder", "The signature file folder does not exist or has been moved.")
             return
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
     @staticmethod
     def validate_input_file(candidate: Path) -> int:
         if not candidate.exists():
-            raise ValueError("所选文件不存在，可能已被移动或删除。")
+            raise ValueError("The selected file does not exist. It may have been moved or deleted.")
         if not candidate.is_file():
-            raise ValueError("请选择普通文件，不能选择文件夹。")
+            raise ValueError("Please choose a regular file, not a folder.")
         if not os.access(candidate, os.R_OK):
-            raise ValueError("没有读取该文件的权限。")
+            raise ValueError("You do not have permission to read this file.")
         return candidate.stat().st_size
 
     @staticmethod
@@ -509,13 +521,17 @@ class P7SSignerWindow(QMainWindow):
     @staticmethod
     def friendly_error(error: SigningError) -> str:
         if isinstance(error, CertificateExpiredError):
-            return "证书有效期异常。请更换有效的签名证书。"
+            return "The certificate validity period is invalid. Please use a valid signing certificate."
         if isinstance(error, KeyCertificateMismatchError):
-            return "私钥与证书不匹配。请检查签名材料。"
+            return "The private key does not match the certificate. Please check the signing materials."
         if isinstance(error, VerificationError):
-            return f"{error}\n\n建议：请重新生成签名；如果仍失败，请检查证书、私钥和原文件是否被替换。"
-        if isinstance(error, (SigningMaterialError, InputFileError, OutputFileError)):
-            return str(error)
+            return "Automatic signature verification failed.\n\nSuggestion: regenerate the signature. If it still fails, check whether the certificate, private key, or source file has been replaced."
+        if isinstance(error, SigningMaterialError):
+            return "Signing material is unavailable. Please check private_key.pem and user.crt."
+        if isinstance(error, InputFileError):
+            return "Input file error. Please check whether the source file exists and is readable."
+        if isinstance(error, OutputFileError):
+            return "Output file error. Please check the destination folder permissions and available disk space."
         return str(error)
 
     @staticmethod
@@ -524,32 +540,32 @@ class P7SSignerWindow(QMainWindow):
 
 
 QSS = """
-QWidget#root { background: #17202B; font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", "Helvetica Neue", Arial; }
+QWidget#root { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #171C29, stop:0.48 #202033, stop:1 #271E2C); font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", "Helvetica Neue", Arial; }
 QFrame#signingCard {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #FBFCFF, stop:0.52 #F7F9FC, stop:1 #F3F8F7);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #FFF9FD, stop:0.50 #F8FAFF, stop:1 #F5F2FF);
     border: 1px solid rgba(255, 255, 255, 180);
     border-radius: 22px;
 }
-QFrame#signingCard[dragActive="true"] { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #F7FBFF, stop:1 #F1FFF9); border: 1px solid #8EC5FF; }
-QFrame#accentRail { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0A84FF, stop:0.56 #64D2FF, stop:1 #30D158); border-radius: 2px; }
+QFrame#signingCard[dragActive="true"] { background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #FFF7FC, stop:1 #F2F7FF); border: 1px solid #D8B4FE; }
+QFrame#accentRail { background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #D8B4FE, stop:0.52 #F0ABFC, stop:1 #FDA4AF); border-radius: 2px; }
 QLabel#title { color: #161B22; font-size: 29px; font-weight: 800; letter-spacing: -0.4px; }
 QLabel#subtitle { color: #7F8893; font-size: 13px; padding-top: 9px; letter-spacing: 0.1px; }
 QLabel#certInfo {
-    background: #F1F7FF;
-    border: 1px solid #DCEBFF;
+    background: #F8F2FF;
+    border: 1px solid #EADDFC;
     border-radius: 13px;
     color: #627386;
     font-size: 11px;
     padding: 11px 14px;
 }
 QFrame#fileDropZone {
-    background: #FFFFFF;
-    border: 1px solid #DFE9F4;
+    background: #FFFDFE;
+    border: 1px solid #E9E0F1;
     border-radius: 16px;
 }
 QFrame#fileDropZone[dragActive="true"] {
-    background: #F2FAFF;
-    border: 1px solid #0A84FF;
+    background: #FFF7FC;
+    border: 1px solid #C084FC;
 }
 QLabel#sectionTitle {
     color: #2A313B;
@@ -558,37 +574,37 @@ QLabel#sectionTitle {
     letter-spacing: 0.2px;
 }
 QLineEdit#filePath {
-    background: #FAFCFF;
-    border: 1px solid #DEE8F2;
+    background: #FBFAFF;
+    border: 1px solid #E4DFF0;
     border-radius: 12px;
     color: #1F2732;
     padding: 12px 14px;
     font-size: 13px;
-    selection-background-color: #DCEEFF;
+    selection-background-color: #F3D7FF;
 }
 QLineEdit#filePath:focus { border: 1px solid #C9D2DC; }
-QLineEdit#filePath[dragActive="true"] { border: 1px solid #0A84FF; background: #FFFFFF; }
+QLineEdit#filePath[dragActive="true"] { border: 1px solid #C084FC; background: #FFFFFF; }
 QLabel#fileInfo { color: #8B95A1; font-size: 11px; padding-top: 7px; }
-QLabel#fileInfo[dragActive="true"] { color: #0A84FF; font-weight: 600; }
+QLabel#fileInfo[dragActive="true"] { color: #A855F7; font-weight: 600; }
 QFrame#statusPanel {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #F0F7FF, stop:0.55 #F5F3FF, stop:1 #F1FFF7);
-    border: 1px solid #E1EAF3;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #F8F2FF, stop:0.52 #FFF1F7, stop:1 #F1F6FF);
+    border: 1px solid #E9DFF4;
     border-radius: 15px;
 }
 QLabel#status { color: #7B8490; font-size: 12px; font-weight: 600; }
 QLabel#percent { color: #7B8490; font-size: 12px; font-weight: 700; }
 QLabel#securityNote { color: #9CA5AF; font-size: 11px; }
-QProgressBar#progress { background: #DEE8F2; border: none; border-radius: 5px; min-height: 9px; max-height: 9px; }
-QProgressBar#progress::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0A84FF, stop:0.65 #64D2FF, stop:1 #30D158); border-radius: 5px; }
+QProgressBar#progress { background: #E8E1EF; border: none; border-radius: 5px; min-height: 9px; max-height: 9px; }
+QProgressBar#progress::chunk { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #A78BFA, stop:0.58 #F0ABFC, stop:1 #FDA4AF); border-radius: 5px; }
 QPushButton { border: none; border-radius: 12px; padding: 11px 19px; font-size: 13px; font-weight: 700; min-height: 20px; }
 QPushButton#primaryButton { background: #0A84FF; color: #FFFFFF; }
 QPushButton#primaryButton:hover { background: #0071E3; }
 QPushButton#primaryButton:pressed { background: #005BBF; }
 QPushButton#primaryButton:disabled { background: #C2CAD4; color: #F7F9FB; }
-QPushButton#secondaryButton { background: #F2F6FB; color: #27313D; border: 1px solid #E1EAF4; }
-QPushButton#secondaryButton:hover { background: #EAF4FF; }
-QPushButton#secondaryButton:pressed { background: #DCEEFF; }
-QPushButton#secondaryButton:disabled { background: #F1F4F8; color: #A4ADB8; border: 1px solid #E8ECF1; }
+QPushButton#secondaryButton { background: #F8F4FC; color: #27313D; border: 1px solid #E8DFF2; }
+QPushButton#secondaryButton:hover { background: #F3EAFE; }
+QPushButton#secondaryButton:pressed { background: #E9D5FF; }
+QPushButton#secondaryButton:disabled { background: #F4F2F6; color: #A4ADB8; border: 1px solid #ECE7F0; }
 """
 
 
